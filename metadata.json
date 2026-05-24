@@ -1,0 +1,6 @@
+{
+  "name": "Website Design MD Generator",
+  "description": "Generates a comprehensive design system style Markdown (colors, typography, Tailwind component templates) from any website link.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
