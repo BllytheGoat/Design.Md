@@ -1203,6 +1203,207 @@ Required JSON Output Schema:
     }
   });
 
+  // Serve custom SVG vector branding logo for high-density Android launcher icons
+  app.get("/logo.svg", (req, res) => {
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.send(`<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#121212;}
+	.st1{fill:#F4F1EA;}
+	.st2{fill:url(#SVGID_1_);}
+</style>
+<rect class="st0" width="512" height="512" rx="128"/>
+<circle class="st1" cx="256" cy="256" r="160"/>
+<linearGradient id="SVGID_1_" gradientUnits="userSpaceOnUse" x1="150" y1="150" x2="362" y2="362">
+	<stop  offset="0%" style="stop-color:#635BFF"/>
+	<stop  offset="100%" style="stop-color:#FF007A"/>
+</linearGradient>
+<path class="st2" d="M256,120c-75.1,0-136,60.9-136,136s60.9,136,136,136s136-60.9,136-136S331.1,120,256,120z M256,360
+	c-57.4,0-104-46.6-104-104s46.6-104,104-104s104,46.6,104,104S313.4,360,256,360z"/>
+<polygon class="st0" points="256,170 270,210 310,210 278,235 292,275 256,250 220,275 234,235 202,210 242,210 "/>
+</svg>`);
+  });
+
+  // Serve official Web Application Manifest for Android homescreen installs
+  app.get("/manifest.webmanifest", (req, res) => {
+    res.setHeader("Content-Type", "application/manifest+json");
+    res.json({
+      name: "Stilo. Live Visual DNA Spec Analyzer",
+      short_name: "Stilo",
+      description: "Extract color swatches, typographic scales, and responsive custom Tailwind template components directly from live public websites.",
+      start_url: "/",
+      display: "standalone",
+      orientation: "portrait",
+      background_color: "#F4F1EA",
+      theme_color: "#121212",
+      categories: ["developer", "utilities", "design"],
+      icons: [
+        {
+          src: "/logo.svg",
+          sizes: "any",
+          type: "image/svg+xml",
+          purpose: "any maskable"
+        }
+      ],
+      shortcuts: [
+        {
+          name: "Open Explorer",
+          url: "/?tab=explorer",
+          description: "Analyze new website design sheets"
+        },
+        {
+          name: "Launch Sandbox",
+          url: "/?tab=sandbox",
+          description: "Playground for Tailwind templates"
+        }
+      ]
+    });
+  });
+
+  // Serve Service Worker for caching and premium mobile capabilities
+  app.get("/sw.js", (req, res) => {
+    res.setHeader("Content-Type", "application/javascript");
+    res.send(`const CACHE_NAME = 'stilo-pwa-v2';
+const PRE_CACHE = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/logo.svg'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(PRE_CACHE);
+    }).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  // Gracepass non-GET queries
+  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
+    return;
+  }
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      return cached || fetch(event.request).then((response) => {
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
+        }
+        const cloned = response.clone();
+        caches.open(CACHE_NAME).then(c => c.put(event.request, cloned));
+        return response;
+      }).catch(() => caches.match('/index.html'));
+    })
+  );
+});`);
+  });
+
+  // Dedicated Android APK packaging portal compilation endpoint
+  app.post("/api/build-mobile-kit", (req, res) => {
+    const { appName, description } = req.body || {};
+    const safeName = (appName || "Stilo").replace(/[^a-zA-Z0-9]/g, "");
+    const packageId = `com.stilo.designer.${safeName.toLowerCase()}`;
+    
+    // Construct a premium Capacitor configuration sheet
+    const capacitorConfig = {
+      appId: packageId,
+      appName: appName || "Stilo Mobile",
+      webDir: "dist",
+      bundledWebRuntime: false,
+      server: {
+        androidScheme: "https",
+        allowNavigation: ["*"]
+      }
+    };
+
+    // Ready-run automated build environment wrapper shell script for user copy-paste or local executing
+    const runScript = `#!/bin/bash
+echo "============================================================"
+echo "  Stilo Mobile Builder Engine - Generating Native Android APK "
+echo "============================================================"
+echo "Creating compilation directory and bundling files..."
+
+# Ensure we have capacitor installed
+npm install @capacitor/core @capacitor/cli @capacitor/android
+
+# Initialize Capacitor app with dynamic specifications
+npx cap init "${appName || "Stilo Mobile"}" "${packageId}" --web-dir=dist
+
+# Generate production client build files
+npm run build
+
+# Add the Android platform workspace
+npx cap add android
+
+# Sync all bundled HTML/JS assets to the native Android project
+npx cap sync android
+
+echo ""
+echo "🔥 SUCCESS: Your workspace is fully synchronized and prepped!"
+echo "------------------------------------------------------------"
+echo "To build a release APK file, simply execute:"
+echo "👉 npx cap open android"
+echo "Inside Android Studio, select 'Build > Build Bundle(s) / APK(s) > Build APK(s)'."
+echo "Your production .apk file will be assembled instantly!"
+echo "============================================================"
+`;
+
+    // Return the pre-configured package spec properties allowing prompt downloads of visual configurations
+    return res.json({
+      success: true,
+      appName: appName || "Stilo Mobile",
+      packageId,
+      capacitorConfig: JSON.stringify(capacitorConfig, null, 2),
+      buildScript: runScript,
+      androidManifestXml: `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="${packageId}">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="${appName || "Stilo Mobile"}"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|fontScale|screenLayout|density"
+            android:theme="@style/AppTheme.NoActionBarLaunch">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>`,
+      installInstructions: `# Android Native Compilation Guide for ${appName || "Stilo"}
+
+To build your fully-functional native Android .APK package from this setup:
+
+1. Create a clean project folder on your computer and extract this bundle.
+2. In your terminal, run standard package installs:
+   \`npm install\`
+3. Bring in Capacitor assets:
+   \`npx cap run android\`
+4. Ready to build! Feel free to compile or distribute.`
+    });
+  });
+
   // Global API error handler to catch throw/compile errors on server-side routes and ensure JSON format is returned instead of HTML
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error(`[Express Global Catch-All Error Handler] url: ${req.url}`, err);

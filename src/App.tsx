@@ -32,6 +32,7 @@ import { TailwindComponents } from "./components/TailwindComponents";
 import { DEFAULT_STITCH_DATA } from "./DEFAULT_STITCH_DATA";
 import { SandboxWorkspace } from "./components/SandboxWorkspace";
 import { ContextDevBrandTab } from "./components/ContextDevBrandTab";
+import { MobileHub } from "./components/MobileHub";
 
 // Preset sites with customized metadata to allow rapid user interaction and flawless demonstrations
 const PRESETS = [
@@ -115,7 +116,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DesignSystemData | null>(null);
   const [activeTab, setActiveTab] = useState<"markdown" | "palette" | "typography" | "components" | "brand">("markdown");
-  const [globalTab, setGlobalTab] = useState<"explorer" | "specs" | "sandbox">("explorer");
+  const [globalTab, setGlobalTab] = useState<"explorer" | "specs" | "sandbox" | "mobile">("explorer");
 
   // Advanced LLM and Credentials Configuration
   const [apiProvider, setApiProvider] = useState(() => localStorage.getItem("stilo_api_provider") || "gemini");
@@ -503,6 +504,15 @@ export default function App() {
               }`}
             >
               Sandbox
+            </button>
+            <button
+              onClick={() => setGlobalTab("mobile")}
+              className={`pb-1 cursor-pointer transition-all focus:outline-none select-none flex items-center gap-1 ${
+                globalTab === "mobile" ? "border-b border-[#635BFF] text-[#635BFF] font-bold" : "opacity-45 hover:opacity-100"
+              }`}
+            >
+              <span>Mobile Hub</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
             </button>
           </nav>
         </div>
@@ -1177,6 +1187,10 @@ export default function App() {
             selectedModel={selectedModel}
             apiBaseUrl={apiBaseUrl}
           />
+        )}
+
+        {globalTab === "mobile" && (
+          <MobileHub data={data} />
         )}
       </main>
 
