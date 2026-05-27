@@ -3,22 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Stilo. Live Visual DNA Spec Analyzer</title>
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="shortcut icon" href="/logo.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/logo.svg" />
-    <meta name="theme-color" content="#121212" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then((reg) => console.log('Stilo Service Worker successfully registered with scope:', reg.scope))
-            .catch((err) => console.warn('Stilo Service Worker registration failed:', err));
-        });
-      }
-    </script>
+    <title>My Google AI Studio App</title>
   </head>
   <body>
     <div id="root"></div>

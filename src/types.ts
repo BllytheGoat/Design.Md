@@ -51,3 +51,11 @@ export interface DesignSystemData {
   rateLimitInfo?: string;
   contextDevBrandData?: ContextDevBrandData;
 }
+
+export interface HistoryEntry {
+  id: string;
+  url: string;
+  timestamp: number;
+  data: DesignSystemData;
+}
+

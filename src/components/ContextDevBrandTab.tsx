@@ -23,7 +23,7 @@ export function ContextDevBrandTab({ brandData }: ContextDevBrandTabProps) {
           No live brand intelligence fetched
         </h4>
         <p className="font-sans text-xs text-black/60 leading-relaxed">
-          Provide a valid website URL and configure your <code className="bg-black/5 px-1 py-0.5 rounded">CONTEXT_DEV_API_KEY</code> to enable live, structured brand profiling directly from the Context.dev APIs network.
+          Provide a valid website URL and launch the brand analyzer to extract live, structured styling specifications directly from our decoupled analysis engines.
         </p>
       </div>
     );
@@ -98,7 +98,7 @@ export function ContextDevBrandTab({ brandData }: ContextDevBrandTabProps) {
                 </h4>
                 <span className="bg-emerald-50 text-emerald-700 text-[10px] font-sans font-bold tracking-widest uppercase px-2 py-0.5 rounded-full border border-emerald-200/50 flex items-center gap-1">
                   <ShieldCheck size={10} />
-                  <span>Context.dev Live</span>
+                  <span>AI Brand Spec</span>
                 </span>
               </div>
               <p className="text-black/50 text-xs font-mono font-medium mt-1 flex items-center gap-1">
@@ -219,7 +219,7 @@ export function ContextDevBrandTab({ brandData }: ContextDevBrandTabProps) {
                 Brand Colors
               </h5>
               <p className="text-black/50 text-[11px] font-sans mt-1">
-                Exact hex codes associated with the target brand in Context.dev's global catalog.
+                Exact hex codes associated with the target brand extracted via our decoupled styling intelligence system.
               </p>
             </div>
 

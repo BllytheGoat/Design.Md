@@ -18,6 +18,7 @@ import {
   Info,
   ExternalLink
 } from "lucide-react";
+import { executeClientSideOllamaRefine } from "../lib/ollamaClient";
 
 interface SandboxWorkspaceProps {
   data: DesignSystemData;
@@ -117,7 +118,37 @@ export function SandboxWorkspace({
         throw new Error(`Design server returned status: ${response.status}`);
       }
 
-      const parsed = await response.json();
+      let parsed = await response.json();
+      if (parsed && parsed.needsClientSideLlm) {
+        console.log("Local Ollama endpoint intercepted during refinement. Running client-side model fetch...");
+        try {
+          parsed = await executeClientSideOllamaRefine(parsed, selectedModel || "", apiBaseUrl || "", userApiKey || "");
+        } catch (ollamaErr: any) {
+          console.warn("Client-side Ollama refiner failed in sandbox workspace. Falling back to backend heuristic replacements...", ollamaErr.message || ollamaErr);
+          const fallbackRes = await fetch("/api/refine-component", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              component: {
+                ...activeComponent,
+                tailwindCode: localCode
+              },
+              prompt: refinePrompt,
+              apiProvider,
+              userApiKey,
+              selectedModel,
+              apiBaseUrl,
+              forceHeuristic: true
+            })
+          });
+          if (fallbackRes.ok) {
+            parsed = await fallbackRes.json();
+          } else {
+            throw new Error(`Ollama refiner completed with connection failure, and automatic heuristic fallback failed: ${ollamaErr.message || ollamaErr}`);
+          }
+        }
+      }
+
       if (parsed && parsed.tailwindCode) {
         setLocalCode(parsed.tailwindCode);
         setPreviewCode(parsed.tailwindCode);

@@ -24,7 +24,7 @@ import {
   FileJson
 } from "lucide-react";
 
-import { DesignSystemData } from "./types";
+import { DesignSystemData, HistoryEntry } from "./types";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { PaletteVisualizer } from "./components/PaletteVisualizer";
 import { TypographySpec } from "./components/TypographySpec";
@@ -32,7 +32,8 @@ import { TailwindComponents } from "./components/TailwindComponents";
 import { DEFAULT_STITCH_DATA } from "./DEFAULT_STITCH_DATA";
 import { SandboxWorkspace } from "./components/SandboxWorkspace";
 import { ContextDevBrandTab } from "./components/ContextDevBrandTab";
-import { MobileHub } from "./components/MobileHub";
+import { HistoryTab } from "./components/HistoryTab";
+import { executeClientSideOllamaDesign } from "./lib/ollamaClient";
 
 // Preset sites with customized metadata to allow rapid user interaction and flawless demonstrations
 const PRESETS = [
@@ -116,7 +117,21 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DesignSystemData | null>(null);
   const [activeTab, setActiveTab] = useState<"markdown" | "palette" | "typography" | "components" | "brand">("markdown");
-  const [globalTab, setGlobalTab] = useState<"explorer" | "specs" | "sandbox" | "mobile">("explorer");
+  const [globalTab, setGlobalTab] = useState<"explorer" | "specs" | "sandbox" | "history">("explorer");
+
+  // Local extraction history state
+  const [historyList, setHistoryList] = useState<HistoryEntry[]>(() => {
+    try {
+      const stored = localStorage.getItem("stilo_extraction_history");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("stilo_extraction_history", JSON.stringify(historyList));
+  }, [historyList]);
 
   // Advanced LLM and Credentials Configuration
   const [apiProvider, setApiProvider] = useState(() => localStorage.getItem("stilo_api_provider") || "gemini");
@@ -124,6 +139,7 @@ export default function App() {
   const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem("stilo_custom_api_key") || "");
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem("stilo_custom_model") || "default");
   const [customModelName, setCustomModelName] = useState(() => localStorage.getItem("stilo_custom_model_name") || "");
+  const resolvedModel = selectedModel === "custom" ? customModelName.trim() : selectedModel;
   const [showSettings, setShowSettings] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -170,6 +186,15 @@ export default function App() {
   const handleProviderChange = (newProvider: string) => {
     setApiProvider(newProvider);
     setSelectedModel("default");
+    if (newProvider === "ollama") {
+      if (!apiBaseUrl || apiBaseUrl.trim() === "" || apiBaseUrl.includes("together.xyz")) {
+        setApiBaseUrl("http://localhost:11434");
+      }
+    } else if (newProvider === "custom") {
+      if (apiBaseUrl === "http://localhost:11434") {
+        setApiBaseUrl("");
+      }
+    }
   };
 
   const handleSubmit = async (targetUrl = url) => {
@@ -211,7 +236,72 @@ export default function App() {
         throw new Error(resData?.error || "Failed to generate design specifications.");
       }
 
+      if (resData && resData.needsClientSideLlm) {
+        console.log("Local Ollama endpoint intercepted. Running parallel design system specs extraction in user's browser...");
+        try {
+          const result = await executeClientSideOllamaDesign(resData, finalModel, apiBaseUrl, userApiKey);
+          setData(result);
+          
+          const newEntry: HistoryEntry = {
+            id: Date.now().toString(),
+            url: targetUrl,
+            timestamp: Date.now(),
+            data: result
+          };
+          setHistoryList((prev) => {
+            const filtered = prev.filter((item) => item.url.toLowerCase() !== targetUrl.toLowerCase());
+            return [newEntry, ...filtered];
+          });
+          setLoading(false);
+          return;
+        } catch (ollamaErr: any) {
+          console.warn("Local browser-side Ollama execution failed, falling back to premium heuristic engine:", ollamaErr.message || ollamaErr);
+          
+          // Request server-side premium heuristic fallback safely
+          const fallbackResponse = await fetch("/api/generate-design-md", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...requestBody,
+              forceHeuristic: true
+            })
+          });
+          
+          if (!fallbackResponse.ok) {
+            throw new Error(`Failed to retrieve heuristic fallback after local Ollama error: ${ollamaErr.message || ollamaErr}`);
+          }
+          
+          const fallbackData = await fallbackResponse.json();
+          setData(fallbackData);
+          
+          const newEntry: HistoryEntry = {
+            id: Date.now().toString(),
+            url: targetUrl,
+            timestamp: Date.now(),
+            data: fallbackData
+          };
+          setHistoryList((prev) => {
+            const filtered = prev.filter((item) => item.url.toLowerCase() !== targetUrl.toLowerCase());
+            return [newEntry, ...filtered];
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
       setData(resData);
+      
+      // Save entry to extraction history
+      const newEntry: HistoryEntry = {
+        id: Date.now().toString(),
+        url: targetUrl,
+        timestamp: Date.now(),
+        data: resData
+      };
+      setHistoryList((prev) => {
+        const filtered = prev.filter((item) => item.url.toLowerCase() !== targetUrl.toLowerCase());
+        return [newEntry, ...filtered];
+      });
     } catch (err: any) {
       console.error("Analysis Error:", err);
       let errMsg = err.message || "A network layout or response issue occurred while performing deep-learning visual analyses.";
@@ -506,13 +596,12 @@ export default function App() {
               Sandbox
             </button>
             <button
-              onClick={() => setGlobalTab("mobile")}
-              className={`pb-1 cursor-pointer transition-all focus:outline-none select-none flex items-center gap-1 ${
-                globalTab === "mobile" ? "border-b border-[#635BFF] text-[#635BFF] font-bold" : "opacity-45 hover:opacity-100"
+              onClick={() => setGlobalTab("history")}
+              className={`pb-1 cursor-pointer transition-all focus:outline-none select-none ${
+                globalTab === "history" ? "border-b border-black font-bold opacity-100" : "opacity-45 hover:opacity-100"
               }`}
             >
-              <span>Mobile Hub</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+              History
             </button>
           </nav>
         </div>
@@ -607,6 +696,7 @@ export default function App() {
                         <option value="openai">OpenAI Developer Suite</option>
                         <option value="anthropic">Anthropic Claude</option>
                         <option value="openrouter">OpenRouter Gateway</option>
+                        <option value="ollama">Ollama (Local Orchestrator)</option>
                         <option value="custom">Custom OpenAI Endpoint...</option>
                       </select>
                     </div>
@@ -620,6 +710,7 @@ export default function App() {
                           {apiProvider === "openai" && "OpenAI Token (sk-...)"}
                           {apiProvider === "anthropic" && "Anthropic Token (x-api-...)"}
                           {apiProvider === "openrouter" && "OpenRouter Token (sk-...)"}
+                          {apiProvider === "ollama" && "Ollama Credentials (Optional)"}
                           {apiProvider === "custom" && "Authorization Key (Bearer Token)"}
                         </span>
                       </label>
@@ -627,12 +718,26 @@ export default function App() {
                         <input
                           type={showKey ? "text" : "password"}
                           value={userApiKey}
-                          onChange={(e) => setUserApiKey(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setUserApiKey(val);
+                            const trimmed = val.trim();
+                            if (trimmed.startsWith("sk-or-v1-")) {
+                              handleProviderChange("openrouter");
+                            } else if (trimmed.startsWith("sk-ant-")) {
+                              handleProviderChange("anthropic");
+                            } else if (trimmed.startsWith("sk-proj-") || (trimmed.startsWith("sk-") && !trimmed.startsWith("sk-or-v1-") && !trimmed.startsWith("sk-ant-"))) {
+                              handleProviderChange("openai");
+                            } else if (trimmed.startsWith("AIzaSy")) {
+                              handleProviderChange("gemini");
+                            }
+                          }}
                           placeholder={
                             apiProvider === "gemini" ? "AIzaSy... (leave blank for default)" :
                             apiProvider === "openai" ? "sk-proj-... " :
                             apiProvider === "anthropic" ? "sk-ant-... " :
                             apiProvider === "openrouter" ? "sk-or-v1-... " :
+                            apiProvider === "ollama" ? "Optional credentials/auth..." :
                             "Enter authorization key..."
                           }
                           className="w-full bg-[#FAF9F6] border border-black/15 focus:border-black rounded px-3 py-2 text-xs font-mono focus:outline-none transition-colors"
@@ -707,27 +812,41 @@ export default function App() {
                           </>
                         )}
 
+                        {apiProvider === "ollama" && (
+                          <>
+                            <option value="default">Default (llama3)</option>
+                            <option value="llama3">Llama 3</option>
+                            <option value="llama3.2">Llama 3.2</option>
+                            <option value="llama3.1">Llama 3.1</option>
+                            <option value="deepseek-r1">DeepSeek R1</option>
+                            <option value="qwen2.5">Qwen 2.5</option>
+                            <option value="mistral">Mistral</option>
+                            <option value="gemma2">Gemma 2</option>
+                            <option value="phi3">Phi 3</option>
+                          </>
+                        )}
+
                         <option value="custom">Other Custom Model Schema...</option>
                       </select>
                     </div>
                   </div>
 
                   <div className="flex flex-col md:flex-row gap-5">
-                    {/* Custom API Base URL for Custom endpoints */}
-                    {apiProvider === "custom" && (
+                    {/* Custom/Ollama API Base URL */}
+                    {(apiProvider === "custom" || apiProvider === "ollama") && (
                       <motion.div
                         initial={{ opacity: 0, y: -4 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-1.5 flex-1"
                       >
                         <label className="text-[9px] uppercase tracking-widest font-sans font-bold text-black/65">
-                          Custom Endpoint Base URL (OpenAI-compatible)
+                          {apiProvider === "ollama" ? "Ollama Connection Address" : "Custom Endpoint Base URL (OpenAI-compatible)"}
                         </label>
                         <input
                           type="text"
                           value={apiBaseUrl}
                           onChange={(e) => setApiBaseUrl(e.target.value)}
-                          placeholder="e.g. https://api.together.xyz/v1 or http://localhost:11434/v1"
+                          placeholder={apiProvider === "ollama" ? "e.g. http://localhost:11434" : "e.g. https://api.together.xyz/v1 or http://localhost:11434/v1"}
                           className="w-full bg-[#FAF9F6] border border-black/15 focus:border-black rounded px-3 py-2 text-xs font-mono focus:outline-none transition-colors"
                         />
                       </motion.div>
@@ -751,6 +870,7 @@ export default function App() {
                             apiProvider === "gemini" ? "models/gemini-1.5-pro-002" :
                             apiProvider === "openai" ? "gpt-4-turbo" :
                             apiProvider === "anthropic" ? "claude-3-haiku-20240307" :
+                            apiProvider === "ollama" ? "llama3:8b" :
                             "e.g. meta-llama/llama-3-8b-instruct"
                           }
                           className="w-full bg-[#FAF9F6] border border-black/15 focus:border-black rounded px-3 py-2 text-xs font-mono focus:outline-none transition-colors"
@@ -992,7 +1112,7 @@ export default function App() {
                       }}
                       apiProvider={apiProvider}
                       userApiKey={userApiKey}
-                      selectedModel={selectedModel}
+                      selectedModel={resolvedModel}
                       apiBaseUrl={apiBaseUrl}
                     />
                   )}
@@ -1153,7 +1273,7 @@ export default function App() {
                       }}
                       apiProvider={apiProvider}
                       userApiKey={userApiKey}
-                      selectedModel={selectedModel}
+                      selectedModel={resolvedModel}
                       apiBaseUrl={apiBaseUrl}
                     />
                   )}
@@ -1184,13 +1304,30 @@ export default function App() {
             }}
             apiProvider={apiProvider}
             userApiKey={userApiKey}
-            selectedModel={selectedModel}
+            selectedModel={resolvedModel}
             apiBaseUrl={apiBaseUrl}
           />
         )}
 
-        {globalTab === "mobile" && (
-          <MobileHub data={data} />
+        {globalTab === "history" && (
+          <HistoryTab
+            historyList={historyList}
+            onSelectEntry={(entry) => {
+              setData(entry.data);
+              setUrl(entry.url);
+              setGlobalTab("specs");
+            }}
+            onDeleteEntry={(id) => {
+              setHistoryList(prev => prev.filter(item => item.id !== id));
+            }}
+            onClearHistory={() => {
+              setHistoryList([]);
+            }}
+            onLoadPreset={(presetUrl) => {
+              setGlobalTab("explorer");
+              handlePresetClick(presetUrl);
+            }}
+          />
         )}
       </main>
 

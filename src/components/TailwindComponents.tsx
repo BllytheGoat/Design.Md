@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DesignComponent } from "../types";
 import { Code, Eye, Laptop, ArrowRight, Smartphone, Tablet, Monitor, Wand2, Sparkles, RefreshCw, Moon, Sun } from "lucide-react";
+import { executeClientSideOllamaRefine } from "../lib/ollamaClient";
 
 interface TailwindComponentsProps {
   components: DesignComponent[];
@@ -70,7 +71,34 @@ export function TailwindComponents({
         throw new Error(`Failed to contact design refinement engine: HTTP Status ${response.status}`);
       }
 
-      const parsed = await response.json();
+      let parsed = await response.json();
+      if (parsed && parsed.needsClientSideLlm) {
+        console.log("Local Ollama endpoint intercepted during refinement. Running client-side model fetch...");
+        try {
+          parsed = await executeClientSideOllamaRefine(parsed, selectedModel || "", apiBaseUrl || "", userApiKey || "");
+        } catch (ollamaErr: any) {
+          console.warn("Client-side Ollama refiner failed. Falling back to backend heuristic replacements...", ollamaErr.message || ollamaErr);
+          const fallbackRes = await fetch("/api/refine-component", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              component: activeComponent,
+              prompt: refinePrompt,
+              apiProvider,
+              userApiKey,
+              selectedModel,
+              apiBaseUrl,
+              forceHeuristic: true
+            })
+          });
+          if (fallbackRes.ok) {
+            parsed = await fallbackRes.json();
+          } else {
+            throw new Error(`Ollama refiner completed with connection failure, and automatic heuristic fallback failed: ${ollamaErr.message || ollamaErr}`);
+          }
+        }
+      }
+
       if (parsed && parsed.tailwindCode) {
         if (onUpdateComponent) {
           onUpdateComponent(activeIndex, {
